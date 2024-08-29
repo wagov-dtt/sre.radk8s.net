@@ -12,7 +12,7 @@ Below guides are to setup [Certified Kubernetes](https://www.cncf.io/training/ce
 
 - [Karpenter](https://karpenter.sh) to prefer spot nodes and revert to ondemand if they aren’t available
 - [Longhorn ready nodes and NVMe disks](https://longhorn.io/docs/latest/references/settings/#create-default-disk-on-labeled-nodes)  with [best-effort data locality](https://longhorn.io/docs/latest/high-availability/data-locality/#data-locality-settings)
-- [Traefik](https://doc.traefik.io/traefik/) and [LetsEncrypt](https://letsencrypt.org/getting-started/) with an [cert-manager (ACME)](https://cert-manager.io/docs/configuration/acme/#configuration)
+- [Traefik](https://doc.traefik.io/traefik/) and [LetsEncrypt](https://letsencrypt.org/getting-started/) with a [cert-manager (ACME)](https://cert-manager.io/docs/configuration/acme/#configuration) ClusterIssuer configured
 - [Rancher](https://ranchermanager.docs.rancher.com/getting-started/overview) and [Fleet](https://fleet.rancher.io) for multi cluster admin, gitops and access mgmt.
 
 ## Install Guides
