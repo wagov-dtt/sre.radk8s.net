@@ -17,7 +17,7 @@ Below guides are to setup [Certified Kubernetes](https://www.cncf.io/training/ce
 
 ## Install Guides
 
-- Azure with [AKS Automatic](docs/kubernetes/azure-aks)
+- Azure with [AKS Automatic](docs/kubernetes/aks-automatic)
 - TODO: AWS with [karpenter/eksctl](https://karpenter.sh/v1.0/getting-started/getting-started-with-karpenter/)
 - TODO: GKE with [Autopilot](https://cloud.google.com/kubernetes-engine/docs/concepts/autopilot-overview)
 - TODO: OCI with [OKE](https://www.oracle.com/cloud/cloud-native/kubernetes-engine/features/)
