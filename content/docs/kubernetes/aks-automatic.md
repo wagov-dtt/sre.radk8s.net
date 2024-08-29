@@ -21,7 +21,7 @@ az aks get-credentials --resource-group $RG --name $NAME --overwrite-existing
 
 The above steps can also be done in the [Azure portal](https://learn.microsoft.com/en-us/azure/aks/learn/quick-kubernetes-automatic-deploy?pivots=azure-portal) if preferred.
 
-Connect to the cluster using cloud shell, and run the [bootstrap](https://github.com/wagov-dtt/site-reliability-engineering/blob/main/static/bootstrap_k8s/__main__.py) to configure kubernetes. If `RANCHER_FQDN` env var is configured the bootstrap will also install Rancher.
+Connect to the cluster using cloud shell, and run the [bootstrap](https://github.com/wagov-dtt/site-reliability-engineering/blob/main/static/bootstrap_k8s/__main__.py) to configure kubernetes with [nodes.yaml](https://github.com/wagov-dtt/site-reliability-engineering/blob/main/static/bootstrap_k8s/config/nodes.yaml) and install initial helm charts. If `RANCHER_FQDN` env var is configured the bootstrap will also install Rancher.
 
 ```bash
 # Setup nodes
