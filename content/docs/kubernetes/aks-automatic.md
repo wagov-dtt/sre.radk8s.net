@@ -8,7 +8,9 @@ To get maximum price/performance ration, the below establishes an AKS cluster us
 
 ## Setup using AKS Automatic
 
-Create a cluster using [AKS Automatic](https://learn.microsoft.com/en-us/azure/aks/intro-aks-automatic). 
+Create a cluster using [AKS Automatic](https://learn.microsoft.com/en-us/azure/aks/intro-aks-automatic). The below is easiest to follow along on [shell.azure.com](https://shell.azure.com).
+
+[![Azure Cloud Shell](https://img.shields.io/badge/Azure%20Cloud%20Shell-Bash-blue?style=for-the-badge&logo=azure)](https://shell.azure.com).
 
 ```bash
 # Create an AKS Automatic cluster from azure cloud shell
@@ -43,7 +45,7 @@ In rancher, under Cluster Management click Import Existing and copy the `kubectl
 
 ```bash
 unset RANCHER_FQDN
-export RG=rancher01 NAME=rancher02
+export RG=clusters01 NAME=rancher02
 az aks create --resource-group $RG --name $NAME --sku automatic
 ```
 
