@@ -11,7 +11,7 @@ spec:
       containers:
         - name: pause
           image: k8s.gcr.io/pause
-          resources: {requests: {cpu: 10m, memory: 64Mi}}
+          resources: {requests: {cpu: 1}}
       affinity:
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -27,6 +27,7 @@ spec:
   weight: 10
   template:
     spec:
+      disruption: {budgets: [{nodes: "0"}]}
       nodeClassRef: {name: default}
       requirements:
         - {key: karpenter.sh/capacity-type, operator: In, values: [spot, on-demand]}
