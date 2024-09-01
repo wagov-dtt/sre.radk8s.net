@@ -12,7 +12,7 @@ Create a cluster using [AKS Automatic](https://learn.microsoft.com/en-us/azure/a
 
 ```bash
 # Create an AKS Automatic cluster from azure cloud shell
-export RG=rancher01 NAME=rancher01
+export RG=clusters01 NAME=rancher01
 az extension add --name aks-preview
 az group create --name $RG --location australiaeast
 az aks create --resource-group $RG --name $NAME --sku automatic
