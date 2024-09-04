@@ -1,0 +1,258 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'EC2 Spot Instance with On-Demand fallback, ASG, FSx ZFS, SSM, and dual-stack NLB'
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: r6a.8xlarge
+    Description: EC2 instance type
+    AllowedValues: [r6a.4xlarge, r6a.8xlarge, r6a.12xlarge, r6a.16xlarge]
+    ConstraintDescription: must be a valid EC2 r6a instance type (4xlarge, 8xlarge, 12xlarge, or 16xlarge).
+
+  StorageCapacity:
+    Type: Number
+    Default: 2048
+    Description: FSx for OpenZFS storage capacity in GiB
+    MinValue: 1024
+    MaxValue: 524288
+    ConstraintDescription: must be between 64 GiB and 524,288 GiB.
+
+  ThroughputCapacity:
+    Type: Number
+    Default: 1280
+    Description: FSx for OpenZFS throughput capacity in MBps
+    AllowedValues: [640, 1280, 2560, 3840]
+
+  SSMProvisioningScript:
+    Type: String
+    Description: Single-line script for SSM Association to run on instances
+    Default: "#!/bin/bash\ncurl -sfL https://get.k3s.io | INSTALL_K3S_EXEC=\"--kubelet-arg=max-pods=5000\" sh -"
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 192.168.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+      Tags: [{ Key: Name, Value: !Sub '${AWS::StackName}-VPC' }]
+
+  VPCIPv6:
+    Type: AWS::EC2::VPCCidrBlock
+    Properties:
+      VpcId: !Ref VPC
+      AmazonProvidedIpv6CidrBlock: true
+
+  IGW:
+    Type: AWS::EC2::InternetGateway
+    Properties: { Tags: [{ Key: Name, Value: !Sub '${AWS::StackName}-IGW' }] }
+
+  IGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties: { InternetGatewayId: !Ref IGW, VpcId: !Ref VPC }
+
+  SubnetZoneA:
+    Type: AWS::EC2::Subnet
+    DependsOn: VPCIPv6
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Select [0, !Cidr [!GetAtt VPC.CidrBlock, 4, 8]]
+      Ipv6CidrBlock: !Select [0, !Cidr [!Select [0, !GetAtt VPC.Ipv6CidrBlocks], 4, 64]]
+      MapPublicIpOnLaunch: true
+      AssignIpv6AddressOnCreation: true
+      Tags: [{ Key: Name, Value: !Sub '${AWS::StackName}-SubnetZoneA' }]
+
+  SubnetZoneB:
+    Type: AWS::EC2::Subnet
+    DependsOn: VPCIPv6
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Select [1, !Cidr [!GetAtt VPC.CidrBlock, 4, 8]]
+      Ipv6CidrBlock: !Select [1, !Cidr [!Select [0, !GetAtt VPC.Ipv6CidrBlocks], 4, 64]]
+      MapPublicIpOnLaunch: true
+      AssignIpv6AddressOnCreation: true
+      Tags: [{ Key: Name, Value: !Sub '${AWS::StackName}-SubnetZoneB' }]
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties: { VpcId: !Ref VPC, Tags: [{ Key: Name, Value: !Sub '${AWS::StackName}-PublicRT' }] }
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: IGWAttachment
+    Properties: { RouteTableId: !Ref PublicRouteTable, DestinationCidrBlock: 0.0.0.0/0, GatewayId: !Ref IGW }
+
+  IPv6DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: IGWAttachment
+    Properties: { RouteTableId: !Ref PublicRouteTable, DestinationIpv6CidrBlock: "::/0", GatewayId: !Ref IGW }
+
+  SubnetZoneARTAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: { RouteTableId: !Ref PublicRouteTable, SubnetId: !Ref SubnetZoneA }
+
+  SubnetZoneBRTAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: { RouteTableId: !Ref PublicRouteTable, SubnetId: !Ref SubnetZoneB }
+
+  InstanceSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub '${AWS::StackName} Instance SG'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0 }
+        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0 }
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIpv6: "::/0" }
+        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIpv6: "::/0" }
+      Tags: [{ Key: Name, Value: !Sub '${AWS::StackName}-InstanceSG' }]
+
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement: [{ Effect: Allow, Principal: { Service: ec2.amazonaws.com }, Action: sts:AssumeRole }]
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+        - arn:aws:iam::aws:policy/AmazonFSxFullAccess
+      Tags: [{ Key: Name, Value: !Sub '${AWS::StackName}-InstanceRole' }]
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties: { Roles: [!Ref InstanceRole], Path: '/' }
+
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${AWS::StackName}-LaunchTemplate'
+      LaunchTemplateData:
+        InstanceType: !Ref InstanceType
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
+        SecurityGroupIds: [!Ref InstanceSG, !GetAtt VPC.DefaultSecurityGroup]
+        IamInstanceProfile: { Name: !Ref InstanceProfile }
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: 30
+              VolumeType: gp3
+              Encrypted: true
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            yum update -y && yum install -y nfs-utils && mkdir /fsx
+            echo "${FSxFileSystem}.fsx.${AWS::Region}.amazonaws.com:/fsx/ /fsx nfs noatime,nfsvers=4.2,sync,nconnect=16,rsize=1048576,wsize=1048576,_netdev 0 0" >> /etc/fstab
+            mount -a
+            mkdir -p /fsx/rancher /var/lib/rancher /fsx/longhorn /var/lib/longhorn
+            echo "${FSxFileSystem}.fsx.${AWS::Region}.amazonaws.com:/fsx/rancher /var/lib/rancher nfs noatime,nfsvers=4.2,sync,nconnect=16,rsize=1048576,wsize=1048576,_netdev 0 0" >> /etc/fstab
+            echo "${FSxFileSystem}.fsx.${AWS::Region}.amazonaws.com:/fsx/longhorn /var/lib/longhorn nfs noatime,nfsvers=4.2,sync,nconnect=16,rsize=1048576,wsize=1048576,_netdev 0 0" >> /etc/fstab
+            mount -a
+
+            # Create a new sysctl configuration file
+            tee /etc/sysctl.d/99-k8s-resources.conf > /dev/null <<EOT
+            fs.inotify.max_user_watches = 524288
+            fs.inotify.max_user_instances = 8192
+            vm.max_map_count = 262144
+            EOT
+
+            # Apply the new sysctl settings
+            sudo sysctl --system
+
+  SSMAssociation:
+    Type: AWS::SSM::Association
+    Properties:
+      Name: AWS-RunShellScript
+      Targets: 
+        - Key: tag:aws:autoscaling:groupName
+          Values: 
+            - !Ref AutoScalingGroup
+      Parameters:
+        commands: 
+          - !Ref SSMProvisioningScript
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier: [!Ref SubnetZoneA]
+      MinSize: 1
+      MaxSize: 1
+      DesiredCapacity: 1
+      TargetGroupARNs: [!Ref NLBTargetGroup]
+      MixedInstancesPolicy:
+        InstancesDistribution:
+          OnDemandPercentageAboveBaseCapacity: 0
+          OnDemandBaseCapacity: 0
+          SpotAllocationStrategy: capacity-optimized
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemplate
+            Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      Tags: 
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-ASG'
+          PropagateAtLaunch: true
+
+  NLB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Type: network
+      Scheme: internet-facing
+      IpAddressType: dualstack
+      Subnets: [!Ref SubnetZoneA, !Ref SubnetZoneB]
+      Tags: [{ Key: Name, Value: !Sub '${AWS::StackName}-NLB' }]
+
+  NLBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckProtocol: TCP
+      Port: 80
+      Protocol: TCP
+      TargetType: instance
+      VpcId: !Ref VPC
+      Tags: [{ Key: Name, Value: !Sub '${AWS::StackName}-NLBTargetGroup' }]
+
+  NLBListener80:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref NLBTargetGroup
+      LoadBalancerArn: !Ref NLB
+      Port: 80
+      Protocol: TCP
+
+  NLBListener443:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref NLBTargetGroup
+      LoadBalancerArn: !Ref NLB
+      Port: 443
+      Protocol: TCP
+
+  FSxFileSystem:
+    Type: AWS::FSx::FileSystem
+    Properties:
+      FileSystemType: OPENZFS
+      StorageCapacity: !Ref StorageCapacity
+      StorageType: SSD
+      SubnetIds: [!Ref SubnetZoneA]
+      OpenZFSConfiguration:
+        DeploymentType: SINGLE_AZ_2
+        ThroughputCapacity: !Ref ThroughputCapacity
+        RootVolumeConfiguration:
+          NfsExports:
+            - ClientConfigurations: 
+              - Clients: !GetAtt VPC.CidrBlock
+                Options: ["rw", "no_root_squash"]  
+          DataCompressionType: LZ4
+      Tags: [{ Key: Name, Value: !Sub '${AWS::StackName}-FSx' }]
+
+Outputs:
+  VPCID: { Description: 'VPC ID', Value: !Ref VPC }
+  LoadBalancerDNS: { Description: 'DNS Name of the Network Load Balancer', Value: !GetAtt NLB.DNSName }
