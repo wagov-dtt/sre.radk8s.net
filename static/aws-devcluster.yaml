@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'EC2 Spot Instance with On-Demand fallback, ASG, FSx ZFS, SSM, and dual-stack NLB'
+Description: 'EC2 Spot Instance with On-Demand fallback, ASG, FSx ZFS, SSM, and dual-stack NLB using Debian'
 
 Parameters:
   InstanceType:
@@ -26,13 +26,13 @@ Parameters:
   SSMProvisioningScript:
     Type: String
     Description: Single-line script for SSM Association to run on instances
-    Default: "#!/bin/bash\ncurl -sfL https://get.k3s.io | INSTALL_K3S_EXEC=\"--kubelet-arg=max-pods=5000\" sh -"
+    Default: "curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC='--kubelet-arg=max-pods=5000' K3S_NODE_NAME=localhost sh -"
 
 Resources:
   VPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: 192.168.0.0/16
+      CidrBlock: 192.168.0.0/16 
       EnableDnsHostnames: true
       EnableDnsSupport: true
       InstanceTenancy: default
@@ -132,7 +132,7 @@ Resources:
       LaunchTemplateName: !Sub '${AWS::StackName}-LaunchTemplate'
       LaunchTemplateData:
         InstanceType: !Ref InstanceType
-        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
+        ImageId: '{{resolve:ssm:/aws/service/debian/linux/amd64/bookworm/latest/hvm/ebs-gp2/ami-id}}'
         SecurityGroupIds: [!Ref InstanceSG, !GetAtt VPC.DefaultSecurityGroup]
         IamInstanceProfile: { Name: !Ref InstanceProfile }
         BlockDeviceMappings:
@@ -144,7 +144,7 @@ Resources:
         UserData:
           Fn::Base64: !Sub |
             #!/bin/bash
-            yum update -y && yum install -y nfs-utils && mkdir /fsx
+            apt-get update && apt-get install -y nfs-common && mkdir /fsx
             echo "${FSxFileSystem}.fsx.${AWS::Region}.amazonaws.com:/fsx/ /fsx nfs noatime,nfsvers=4.2,sync,nconnect=16,rsize=1048576,wsize=1048576,_netdev 0 0" >> /etc/fstab
             mount -a
             mkdir -p /fsx/rancher /var/lib/rancher /fsx/longhorn /var/lib/longhorn
@@ -160,7 +160,7 @@ Resources:
             EOT
 
             # Apply the new sysctl settings
-            sudo sysctl --system
+            sysctl --system
 
   SSMAssociation:
     Type: AWS::SSM::Association
