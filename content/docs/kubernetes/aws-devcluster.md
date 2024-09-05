@@ -13,4 +13,4 @@ helm install --atomic longhorn longhorn/longhorn --namespace longhorn-system --c
 helm install --atomic rancher rancher-latest/rancher --create-namespace --namespace cattle-system --set ingress.tls.source=letsEncrypt --set letsEncrypt.ingress.class=traefik --set hostname=$FQDN --set letsEncrypt.email=$FQDN@maildrop.cc
 ```
 
-As all the dirs are mounted from FSX, the backups of the FSX vol will cover whole environment, and new booted instances will remember/pick up full local rancher/cluster config.
+As all the dirs are on ZFS, local snapshotting is used to enable rollbacks / basic DR.
