@@ -1,17 +1,11 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'EC2 i4i.4xlarge Instance with SSM, IMDSv2, Helm, dual-stack NLB using Debian, ZFS with NVMe for ZIL and L2ARC, and zfs-autobackup for 30 days'
-
-Parameters:
-  SSMProvisioningScript:
-    Type: String
-    Default: |
-      curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC='--kubelet-arg=max-pods=5000 --kube-controller-manager-arg=node-cidr-mask-size=18' sh -
+Description: EC2 r6a.4xlarge with Amazon Linux 2023, Helm, dual-stack NLB, and 4TB gp3 encrypted root volume
 
 Resources:
   VPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: 192.168.0.0/16
+      CidrBlock: 10.0.0.0/16
       EnableDnsHostnames: true
       EnableDnsSupport: true
       InstanceTenancy: default
@@ -21,61 +15,70 @@ Resources:
     Type: AWS::EC2::VPCCidrBlock
     Properties: {VpcId: !Ref VPC, AmazonProvidedIpv6CidrBlock: true}
 
-  IGW:
+  InternetGateway:
     Type: AWS::EC2::InternetGateway
-    Properties: {Tags: [{Key: Name, Value: !Sub '${AWS::StackName}-IGW'}]}
+    Properties:
+      Tags: [{Key: Name, Value: !Sub '${AWS::StackName}-IGW'}]
 
-  IGWAttachment:
+  InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
-    Properties: {InternetGatewayId: !Ref IGW, VpcId: !Ref VPC}
+    Properties: {InternetGatewayId: !Ref InternetGateway, VpcId: !Ref VPC}
 
-  SubnetZoneA:
+  PublicSubnetA:
     Type: AWS::EC2::Subnet
     DependsOn: VPCIPv6
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [0, !GetAZs '']
-      CidrBlock: !Select [0, !Cidr [!GetAtt VPC.CidrBlock, 4, 8]]
-      Ipv6CidrBlock: !Select [0, !Cidr [!Select [0, !GetAtt VPC.Ipv6CidrBlocks], 4, 64]]
+      CidrBlock: 10.0.1.0/24
+      Ipv6CidrBlock: !Select [0, !Cidr [!Select [0, !GetAtt VPC.Ipv6CidrBlocks], 2, 64]]
       MapPublicIpOnLaunch: true
       AssignIpv6AddressOnCreation: true
-      Tags: [{Key: Name, Value: !Sub '${AWS::StackName}-SubnetZoneA'}]
+      Tags: [{Key: Name, Value: !Sub '${AWS::StackName}-PublicSubnetA'}]
 
-  SubnetZoneB:
+  PublicSubnetB:
     Type: AWS::EC2::Subnet
     DependsOn: VPCIPv6
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Select [1, !GetAZs '']
-      CidrBlock: !Select [1, !Cidr [!GetAtt VPC.CidrBlock, 4, 8]]
-      Ipv6CidrBlock: !Select [1, !Cidr [!Select [0, !GetAtt VPC.Ipv6CidrBlocks], 4, 64]]
+      CidrBlock: 10.0.2.0/24
+      Ipv6CidrBlock: !Select [1, !Cidr [!Select [0, !GetAtt VPC.Ipv6CidrBlocks], 2, 64]]
       MapPublicIpOnLaunch: true
       AssignIpv6AddressOnCreation: true
-      Tags: [{Key: Name, Value: !Sub '${AWS::StackName}-SubnetZoneB'}]
+      Tags: [{Key: Name, Value: !Sub '${AWS::StackName}-PublicSubnetB'}]
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
-    Properties: {VpcId: !Ref VPC, Tags: [{Key: Name, Value: !Sub '${AWS::StackName}-PublicRT'}]}
+    Properties:
+      VpcId: !Ref VPC
+      Tags: [{Key: Name, Value: !Sub '${AWS::StackName}-PublicRT'}]
 
   DefaultPublicRoute:
     Type: AWS::EC2::Route
-    DependsOn: IGWAttachment
-    Properties: {RouteTableId: !Ref PublicRouteTable, DestinationCidrBlock: 0.0.0.0/0, GatewayId: !Ref IGW}
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
 
   IPv6DefaultPublicRoute:
     Type: AWS::EC2::Route
-    DependsOn: IGWAttachment
-    Properties: {RouteTableId: !Ref PublicRouteTable, DestinationIpv6CidrBlock: "::/0", GatewayId: !Ref IGW}
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationIpv6CidrBlock: "::/0"
+      GatewayId: !Ref InternetGateway
 
-  SubnetZoneARTAssociation:
+  PublicSubnetARouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties: {RouteTableId: !Ref PublicRouteTable, SubnetId: !Ref SubnetZoneA}
+    Properties: {RouteTableId: !Ref PublicRouteTable, SubnetId: !Ref PublicSubnetA}
 
-  SubnetZoneBRTAssociation:
+  PublicSubnetBRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties: {RouteTableId: !Ref PublicRouteTable, SubnetId: !Ref SubnetZoneB}
+    Properties: {RouteTableId: !Ref PublicRouteTable, SubnetId: !Ref PublicSubnetB}
 
-  InstanceSG:
+  InstanceSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: !Sub '${AWS::StackName} Instance SG'
@@ -92,111 +95,38 @@ Resources:
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
-        Statement: [{Effect: Allow, Principal: {Service: ec2.amazonaws.com}, Action: sts:AssumeRole}]
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+        Statement:
+          - Effect: Allow
+            Principal: {Service: ec2.amazonaws.com}
+            Action: sts:AssumeRole
+      ManagedPolicyArns: [arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore]
       Tags: [{Key: Name, Value: !Sub '${AWS::StackName}-InstanceRole'}]
 
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
-    Properties: {Roles: [!Ref InstanceRole], Path: '/'}
+    Properties: {Roles: [!Ref InstanceRole]}
 
   EC2Instance:
     Type: AWS::EC2::Instance
     Properties:
-      InstanceType: i4i.4xlarge
-      ImageId: '{{resolve:ssm:/aws/service/debian/release/12/latest/amd64}}'
-      SecurityGroupIds: [!Ref InstanceSG, !GetAtt VPC.DefaultSecurityGroup]
-      SubnetId: !Ref SubnetZoneA
+      InstanceType: r6a.4xlarge
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
+      SecurityGroupIds: [!Ref InstanceSecurityGroup]
+      SubnetId: !Ref PublicSubnetA
       IamInstanceProfile: !Ref InstanceProfile
       Tags: [{Key: Name, Value: !Sub '${AWS::StackName}-EC2'}]
       BlockDeviceMappings:
-        - DeviceName: /dev/sdf
-          Ebs: {VolumeSize: 4096, VolumeType: st1, Encrypted: true}
-      UserData:
+        - DeviceName: /dev/xvda
+          Ebs: {VolumeSize: 4096, VolumeType: gp3, Encrypted: true}
+      UserData: 
         Fn::Base64: !Sub |
           #!/bin/bash
-          sed -i 's/main/main contrib/g' /etc/apt/sources.list.d/* && apt -y update && apt -y install curl linux-headers-cloud-amd64 zfsutils-linux open-iscsi nfs-common python3-pip
-          
-          # Install SSM agent
-          mkdir /tmp/ssm && cd /tmp/ssm
-          wget https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/debian_amd64/amazon-ssm-agent.deb
-          dpkg -i amazon-ssm-agent.deb
-          systemctl enable amazon-ssm-agent && systemctl start amazon-ssm-agent
-          
-          # Create ZFS pool
-          modprobe zfs
-          zpool create -f data /dev/nvme1n1
-          zfs set atime=off data && zfs set compression=lz4 data
-          zfs create -o mountpoint=/var/lib/longhorn data/longhorn
-          zfs create -o mountpoint=/var/lib/rancher data/rancher
-          
-          # Create systemd service for adding NVMe to zpool at boot
-          cat <<EOT > /etc/systemd/system/zfs-nvme-setup.service
-          [Unit]
-          Description=Add NVMe device to ZFS pool
-          After=zfs-import.target
-          
-          [Service]
-          Type=oneshot
-          ExecStart=/sbin/zpool add data cache /dev/nvme2n1
-          ExecStart=/sbin/zpool add data log /dev/nvme2n1
-          RemainAfterExit=yes
-          
-          [Install]
-          WantedBy=multi-user.target
-          EOT
-          
-          systemctl enable zfs-nvme-setup.service
-          systemctl start zfs-nvme-setup.service
-          
-          # Install and configure zfs-autobackup
-          pip3 install zfs-autobackup
-          
-          # Create a script for zfs-autobackup
-          cat <<EOT > /usr/local/bin/run-zfs-autobackup.sh
-          #!/bin/bash
-          zfs-autobackup --keep-source 30 data
-          EOT
-          
-          chmod +x /usr/local/bin/run-zfs-autobackup.sh
-          
-          # Create a daily cron job for zfs-autobackup
-          echo "0 1 * * * root /usr/local/bin/run-zfs-autobackup.sh" > /etc/cron.d/zfs-autobackup
-          
-          # Set kernel parameters
+          dnf update -y
+          dnf install -y iscsi-initiator-utils nfs-utils
           echo -e "fs.inotify.max_user_watches = 524288\nfs.inotify.max_user_instances = 8192\nvm.max_map_count = 262144" > /etc/sysctl.d/99-k8s-resources.conf
           sysctl --system
-          
-          # Install Helm
           curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-
-  SSMAssociation:
-    Type: AWS::SSM::Association
-    Properties:
-      Name: AWS-RunShellScript
-      Targets: 
-        - Key: InstanceIds
-          Values: [!Ref EC2Instance]
-      Parameters:
-        commands: 
-          - !Ref SSMProvisioningScript
-
-  IMDSv2SSMAssociation:
-    Type: AWS::SSM::Association
-    Properties:
-      Name: AWS-RunShellScript
-      Targets:
-        - Key: InstanceIds
-          Values: [!Ref EC2Instance]
-      Parameters:
-        commands:
-          - |
-            aws ec2 modify-instance-metadata-options \
-              --instance-id $(curl -s http://169.254.169.254/latest/meta-data/instance-id) \
-              --http-tokens required \
-              --http-endpoint enabled
+          curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" INSTALL_K3S_EXEC='--kubelet-arg=max-pods=5000 --kube-controller-manager-arg=node-cidr-mask-size=18' sh -
 
   NLB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
@@ -204,7 +134,7 @@ Resources:
       Type: network
       Scheme: internet-facing
       IpAddressType: dualstack
-      Subnets: [!Ref SubnetZoneA, !Ref SubnetZoneB]
+      Subnets: [!Ref PublicSubnetA, !Ref PublicSubnetB]
       Tags: [{Key: Name, Value: !Sub '${AWS::StackName}-NLB'}]
 
   NLBTargetGroup:
@@ -235,6 +165,6 @@ Resources:
       Protocol: TCP
 
 Outputs:
-  VPCID: {Description: 'VPC ID', Value: !Ref VPC}
-  InstanceID: {Description: 'EC2 Instance ID', Value: !Ref EC2Instance}
-  LoadBalancerDNS: {Description: 'DNS Name of the Network Load Balancer', Value: !GetAtt NLB.DNSName}
+  VPCID: {Description: VPC ID, Value: !Ref VPC}
+  InstanceID: {Description: EC2 Instance ID, Value: !Ref EC2Instance}
+  LoadBalancerDNS: {Description: DNS Name of the Network Load Balancer, Value: !GetAtt NLB.DNSName}
