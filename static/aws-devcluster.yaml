@@ -126,7 +126,7 @@ Resources:
           echo -e "fs.inotify.max_user_watches = 524288\nfs.inotify.max_user_instances = 8192\nvm.max_map_count = 262144" > /etc/sysctl.d/99-k8s-resources.conf
           sysctl --system
           curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-          curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" INSTALL_K3S_EXEC='--kubelet-arg=max-pods=5000 --kube-controller-manager-arg=node-cidr-mask-size=18' sh -
+          curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" K3S_KUBECONFIG_OUTPUT="/root/.kube/config" INSTALL_K3S_EXEC='--kubelet-arg=max-pods=5000 --kube-controller-manager-arg=node-cidr-mask-size=18' sh -
 
   NLB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
@@ -137,7 +137,7 @@ Resources:
       Subnets: [!Ref PublicSubnetA, !Ref PublicSubnetB]
       Tags: [{Key: Name, Value: !Sub '${AWS::StackName}-NLB'}]
 
-  NLBTargetGroup:
+  NLBTargetGroup80:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       HealthCheckProtocol: TCP
@@ -146,12 +146,23 @@ Resources:
       TargetType: instance
       VpcId: !Ref VPC
       Targets: [{Id: !Ref EC2Instance}]
-      Tags: [{Key: Name, Value: !Sub '${AWS::StackName}-NLBTargetGroup'}]
+      Tags: [{Key: Name, Value: !Sub '${AWS::StackName}-NLBTargetGroup80'}]
+
+  NLBTargetGroup443:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckProtocol: TCP
+      Port: 443
+      Protocol: TCP
+      TargetType: instance
+      VpcId: !Ref VPC
+      Targets: [{Id: !Ref EC2Instance}]
+      Tags: [{Key: Name, Value: !Sub '${AWS::StackName}-NLBTargetGroup443'}]
 
   NLBListener80:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
-      DefaultActions: [{Type: forward, TargetGroupArn: !Ref NLBTargetGroup}]
+      DefaultActions: [{Type: forward, TargetGroupArn: !Ref NLBTargetGroup80}]
       LoadBalancerArn: !Ref NLB
       Port: 80
       Protocol: TCP
@@ -159,7 +170,7 @@ Resources:
   NLBListener443:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
-      DefaultActions: [{Type: forward, TargetGroupArn: !Ref NLBTargetGroup}]
+      DefaultActions: [{Type: forward, TargetGroupArn: !Ref NLBTargetGroup443}]
       LoadBalancerArn: !Ref NLB
       Port: 443
       Protocol: TCP
