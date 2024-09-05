@@ -21,8 +21,7 @@ helm repo add rancher-latest https://releases.rancher.com/server-charts/latest
 helm repo update
 helm install --atomic traefik traefik/traefik -n kube-system -f traefik-values.yaml
 helm install --atomic cert-manager jetstack/cert-manager --namespace cert-manager --create-namespace --set crds.enabled=true
-helm install --atomic longhorn longhorn/longhorn --namespace longhorn-system --create-namespace  --set defaultSettings.defaultDataLocality=best-effort \
---set defaultSettings.storageReservedPercentageForDefaultDisk=0 --set defaultSettings.createDefaultDiskLabeledNodes=True
+helm install --atomic longhorn longhorn/longhorn --namespace longhorn-system --create-namespace  --set defaultSettings.defaultDataLocality=best-effort --set defaultSettings.storageReservedPercentageForDefaultDisk=10
         """, shell=True)
     if rancher_fqdn:
         run("helm install --atomic rancher rancher-latest/rancher --create-namespace --namespace cattle-system"
