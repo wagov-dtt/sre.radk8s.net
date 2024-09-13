@@ -8,6 +8,7 @@ export default defineConfig({
 	integrations: [
 		starlight({
 			title: 'DGov Site Reliability Engineering',
+			lastUpdated: true,
 			social: {
 				github: 'https://github.com/wagov-dtt/sre.radk8s.net',
 				rss: 'https://sre.radk8s.net/rss.xml'

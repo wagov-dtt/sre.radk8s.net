@@ -1,6 +1,6 @@
 ---
 title: Azure AKS Automatic
-pubDate: 2024-09-10
+pubDate: 2024-09-13T15:43:35Z
 ---
 
 # Opinionated AKS setup (Cilium, Longhorn, local NVMe)
