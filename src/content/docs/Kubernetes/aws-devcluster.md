@@ -1,5 +1,6 @@
 ---
 title: AWS EC2 Dev Cluster
+pubDate: 2024-09-10
 ---
 
 # Rancher env for non production workloads
