@@ -11,7 +11,7 @@
     "pubdate": "git ls-files '*.md' | xargs -I {} sh -c 'sed -i \"s/^pubDate:.*/pubDate: $(git log -1 --format=%aI --follow {})/\" {}'"
   },
   "dependencies": {
-    "@astrojs/check": "^0.9.3",
+    "@astrojs/check": "^0.9.4",
     "@astrojs/rss": "^4.0.7",
     "@astrojs/starlight": "^0.28.2",
     "astro": "^4.15.9",
