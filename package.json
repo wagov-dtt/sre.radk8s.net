@@ -1,23 +1,23 @@
 {
-  "name": "sre.radk8s.net",
-  "type": "module",
-  "version": "0.0.1",
+  "name": "abridge-bundle",
+  "version": "2.0.0",
+  "description": "Abridge - set PWA cache files list, bundle and minify js",
+  "author": "Jake G <106644+Jieiku@users.noreply.github.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/Jieiku/abridge",
   "scripts": {
-    "dev": "astro dev",
-    "start": "astro dev",
-    "build": "astro check && astro build",
-    "preview": "astro preview",
-    "astro": "astro",
-    "pubdate": "git ls-files '*.md' | xargs -I {} sh -c 'sed -i \"s/^pubDate:.*/pubDate: $(git log -1 --format=%aI --follow {})/\" {}'"
+    "abridge": "node -e \"if ( require('fs').existsSync('./themes/abridge/package_abridge.js')) {require('fs').copyFileSync('./themes/abridge/package_abridge.js', './package_abridge.js')}\" && node package_abridge.js",
+    "offline": "npm run abridge -- offline",
+    "elasticlunrjava": "npm run abridge -- elasticlunrjava",
+    "elasticlunr": "npm run abridge -- elasticlunr",
+    "pagefind": "npm run abridge -- pagefind",
+    "tinysearch": "npm run abridge -- tinysearch"
   },
   "dependencies": {
-    "@astrojs/check": "^0.9.3",
-    "@astrojs/rss": "^4.0.7",
-    "@astrojs/starlight": "^0.28.2",
-    "astro": "^4.15.9",
-    "markdown-it": "^14.1.0",
-    "sanitize-html": "^2.13.0",
-    "sharp": "^0.33.5",
-    "typescript": "^5.6.2"
+    "fast-toml": "^0.5.4",
+    "jsonminify": "^0.4.2",
+    "pagefind": "^1.1.0",
+    "replace-in-file": "^8.1.0",
+    "uglify-js": "^3.17.4"
   }
 }

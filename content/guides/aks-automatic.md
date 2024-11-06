@@ -1,7 +1,10 @@
----
-title: Azure AKS Automatic
-pubDate: 2024-09-13T15:43:35Z
----
++++
+title = "Azure AKS Automatic"
+date = 2024-09-13T15:43:35Z
+
+[taxonomies]
+tags = ["Kubernetes"]
++++
 
 # Opinionated AKS setup (Cilium, Longhorn, local NVMe)
 

@@ -1,7 +1,10 @@
----
-title: AWS EC2 Dev Cluster
-pubDate: 2024-09-13T15:43:35Z
----
++++
+title = "AWS EC2 Dev Cluster"
+date = 2024-09-13T15:43:35Z
+
+[taxonomies]
+tags = ["Kubernetes"]
++++
 
 # Rancher env for non production workloads
 
