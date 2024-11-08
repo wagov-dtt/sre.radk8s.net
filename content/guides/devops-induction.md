@@ -1,6 +1,6 @@
 +++
 title = "Technical Operations Induction"
-date = 2024-06-11
+date = 2024-11-06
 
 [taxonomies]
 tags = ["Training"]
