@@ -1,6 +1,6 @@
 +++
 title = "Civic Code Lab - Foundations Guide"
-date = 2024-11-06
+date = 2024-11-19
 
 [taxonomies]
 tags = ["Training"]
