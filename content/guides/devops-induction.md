@@ -1,12 +1,10 @@
 +++
-title = "Civic Code Lab - Foundations Guide"
+title = "Civic Code Lab - Foundations Guide (v0.2 - 2024)"
 date = 2024-11-19
 
 [taxonomies]
 tags = ["Training"]
 +++
-
-# Civic Code Lab - Foundations Guide (v0.2 - 2024)
 
 ## Note for New Team Members
 
