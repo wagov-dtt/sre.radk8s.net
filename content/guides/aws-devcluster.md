@@ -1,6 +1,7 @@
 +++
 title = "AWS EC2 Dev Cluster"
 date = 2024-09-13T15:43:35Z
+draft = true
 
 [taxonomies]
 tags = ["Kubernetes"]
