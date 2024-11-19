@@ -4,10 +4,11 @@ date = 2024-11-19
 
 [taxonomies]
 tags = ["Training"]
+[extra]
+toc = true
 +++
 
-## Note for New Team Members
-
+### Note for newcomers
 Please consult with your manager to create a personalised learning path based on:
 * Your current role requirements
 * Professional development goals
